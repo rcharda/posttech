@@ -1,1 +1,528 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>Aplomb Pro</title>
+<style>
+:root{--bg:#0f172a;--card:#1e293b;--line:#334155;--txt:#f1f5f9;--mut:#94a3b8;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444;--acc:#38bdf8;--state:var(--bad)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;overscroll-behavior:none}
+body{padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+.app{max-width:520px;margin:0 auto;min-height:100%;display:flex;flex-direction:column}
+header{padding:14px 16px 6px;display:flex;align-items:center;justify-content:space-between}
+header h1{font-size:18px;margin:0;letter-spacing:.3px}
+header h1 span{color:var(--acc)}
+.tabs{display:flex;gap:6px;padding:6px 16px}
+.tabs button,.seg button{flex:1;padding:10px 6px;border:1px solid var(--line);background:var(--card);color:var(--mut);border-radius:10px;font-size:14px;font-weight:600}
+.tabs button.on,.seg button.on{background:var(--acc);color:#04202e;border-color:var(--acc)}
+.seg{display:flex;gap:6px;padding:6px 16px}
+main{flex:1;padding:6px 16px 20px}
+.view{display:none}.view.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
+.read{text-align:center;transition:color .15s;color:var(--state)}
+.read .val{font-size:68px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.read .sub{color:var(--mut);font-size:14px;margin-top:6px}
+.status{margin-top:8px;font-size:17px;font-weight:700}
+.hint{color:var(--mut);font-size:14px;min-height:20px;margin-top:2px}
+.warn{background:#422006;border:1px solid #92400e;color:#fcd34d;border-radius:10px;padding:8px 10px;font-size:13px;margin-bottom:10px;display:none}
+.vis{display:flex;justify-content:center;margin:4px 0 10px}
+svg{max-width:100%}
+.gauge{margin:6px 4px 0}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row>*{flex:1}
+.btn{padding:13px 10px;border:0;border-radius:12px;font-size:15px;font-weight:700;background:var(--line);color:var(--txt)}
+.btn.pri{background:var(--acc);color:#04202e}
+.btn.ok{background:var(--ok);color:#052e12}
+.btn.dan{background:#7f1d1d;color:#fecaca}
+.btn.on{outline:3px solid var(--warn)}
+label{display:block;font-size:13px;color:var(--mut);margin:8px 0 4px}
+input[type=text],select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--txt);font-size:15px}
+.set{display:flex;align-items:center;justify-content:space-between;padding:8px 0;font-size:15px}
+.set input{width:22px;height:22px}
+.item{border-top:1px solid var(--line);padding:10px 0;display:flex;gap:10px;align-items:center}
+.item:first-child{border-top:0}
+.item img{width:54px;height:54px;object-fit:cover;border-radius:8px}
+.item .t{flex:1;font-size:14px}
+.item .t b{display:block;font-size:15px}
+.badge{padding:3px 8px;border-radius:99px;font-size:12px;font-weight:700}
+.badge.ok{background:#14532d;color:#86efac}.badge.no{background:#7f1d1d;color:#fecaca}
+.x{background:none;border:0;color:var(--mut);font-size:20px;padding:6px}
+.empty{color:var(--mut);text-align:center;padding:18px 0;font-size:14px}
+#start{position:fixed;inset:0;background:var(--bg);z-index:9;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px}
+#start h2{font-size:30px;margin:10px 0 6px}
+#start p{color:var(--mut);max-width:320px;line-height:1.5}
+#start .btn{margin-top:20px;font-size:18px;padding:15px 40px}
+.help h3{margin:14px 0 6px;font-size:15px;color:var(--acc)}
+.help p,.help li{font-size:14px;line-height:1.55;color:#cbd5e1}
+.help ul{padding-left:18px;margin:4px 0}
+#toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#0b1220;border:1px solid var(--line);padding:10px 16px;border-radius:99px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:20}
+#toast.on{opacity:1}
+</style>
+</head>
+<body>
+<div id="start">
+  <svg width="86" height="86" viewBox="0 0 100 100"><rect x="22" y="22" width="56" height="56" rx="8" fill="none" stroke="#38bdf8" stroke-width="6"/><circle cx="50" cy="50" r="9" fill="#22c55e"/><path d="M50 8v10M50 82v10M8 50h10M82 50h10" stroke="#94a3b8" stroke-width="4" stroke-linecap="round"/></svg>
+  <h2>Aplomb <span style="color:#38bdf8">Pro</span></h2>
+  <p>Vérifie en quelques secondes si ton boîtier d'encastrement est bien droit, avec le capteur de ton téléphone.</p>
+  <button class="btn pri" id="startBtn">Démarrer</button>
+</div>
 
+<div class="app">
+  <header><h1>Aplomb <span>Pro</span></h1><span style="font-size:12px;color:var(--mut)" id="sensorState">capteur…</span></header>
+  <div class="tabs">
+    <button data-v="mesure" class="on">Mesure</button>
+    <button data-v="cam">📷 Caméra</button>
+    <button data-v="histo">Historique</button>
+    <button data-v="aide">Aide</button>
+  </div>
+
+  <main>
+    <!-- MESURE -->
+    <section class="view on" id="v-mesure">
+      <div class="seg" style="padding:0 0 10px">
+        <button data-m="v" class="on">Vertical</button>
+        <button data-m="h">Horizontal</button>
+        <button data-m="f">À plat</button>
+      </div>
+      <div class="warn" id="warn"></div>
+      <div class="card" id="card">
+        <div class="vis" id="vis"></div>
+        <div class="read" id="read">
+          <div class="val" id="val">0.0°</div>
+          <div class="status" id="status">—</div>
+          <div class="hint" id="hint"></div>
+          <div class="sub" id="sub"></div>
+        </div>
+        <div class="gauge" id="gaugeWrap"></div>
+      </div>
+      <div class="row" style="margin-bottom:12px">
+        <button class="btn" id="lock">🔒 Figer</button>
+        <button class="btn" id="calib">⚙ Calibrer</button>
+      </div>
+      <div class="card">
+        <label>Repère (pièce, prise, étage…)</label>
+        <input type="text" id="label" placeholder="Ex : Salon – prise gauche">
+        <div class="row" style="margin-top:10px">
+          <button class="btn" id="photoBtn">📷 Photo</button>
+          <button class="btn ok" id="save">✔ Enregistrer</button>
+        </div>
+        <input type="file" id="photo" accept="image/*" capture="environment" hidden>
+        <div class="hint" id="photoInfo" style="margin-top:6px"></div>
+      </div>
+      <div class="card">
+        <label>Tolérance acceptée</label>
+        <select id="tol">
+          <option value="0.2">± 0,2° (très strict)</option>
+          <option value="0.5" selected>± 0,5° (recommandé)</option>
+          <option value="1">± 1°</option>
+          <option value="2">± 2°</option>
+        </select>
+        <div class="set"><span>Son quand c'est droit</span><input type="checkbox" id="sound" checked></div>
+        <div class="set"><span>Vibration quand c'est droit</span><input type="checkbox" id="vib" checked></div>
+        <button class="btn" id="resetCal" style="width:100%;margin-top:6px">Réinitialiser le calibrage</button>
+      </div>
+    </section>
+
+    <!-- CAMERA -->
+    <section class="view" id="v-cam">
+      <div class="card" style="padding:8px">
+        <div id="camBox" style="position:relative;width:100%;aspect-ratio:3/4;background:#000;border-radius:12px;overflow:hidden;touch-action:none">
+          <video id="cam" playsinline muted autoplay style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></video>
+          <canvas id="camOv" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
+          <div id="camMsg" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;text-align:center;padding:24px;color:#fcd34d;background:rgba(0,0,0,.85);font-size:15px;line-height:1.5"></div>
+        </div>
+        <div class="read" style="margin-top:10px">
+          <div class="val" id="camVal" style="font-size:46px">—</div>
+          <div class="status" id="camStatus"></div>
+          <div class="hint" id="camHint"></div>
+        </div>
+        <div class="hint" style="margin:8px 0">Ligne bleue = vraie verticale/horizontale (capteur). Touche l'image et glisse pour poser la ligne verte sur le bord du boîtier.</div>
+        <div class="seg" style="padding:0 0 8px">
+          <button data-c="v" class="on">Vertical</button>
+          <button data-c="h">Horizontal</button>
+        </div>
+        <div class="row">
+          <button class="btn" id="fm">−0,1°</button>
+          <button class="btn" id="fp">+0,1°</button>
+          <button class="btn" id="camFlip">🔄 Caméra</button>
+        </div>
+        <label>Repère (pièce, prise, étage…)</label>
+        <input type="text" id="camLabel" placeholder="Ex : Cuisine – prise plan de travail">
+        <button class="btn ok" id="camSave" style="width:100%;margin-top:10px">📸 Capturer et enregistrer</button>
+      </div>
+    </section>
+
+    <!-- HISTORIQUE -->
+    <section class="view" id="v-histo">
+      <div class="card" id="list"></div>
+      <div class="row">
+        <button class="btn pri" id="copyRep">📋 Copier le rapport</button>
+        <button class="btn dan" id="clearAll">Tout effacer</button>
+      </div>
+    </section>
+
+    <!-- AIDE -->
+    <section class="view help" id="v-aide">
+      <div class="card">
+        <h3>Comment mesurer</h3>
+        <ul>
+          <li><b>Vertical</b> : plaque le dos du téléphone contre le mur (ou une règle posée contre le boîtier), téléphone en portrait. Le téléphone doit toucher le mur sur toute sa face.</li>
+          <li><b>Horizontal</b> : même chose, téléphone en paysage, pour aligner des boîtiers côte à côte.</li>
+          <li><b>À plat</b> : pose le téléphone à plat (plan de travail, sol, dalle) : une bulle indique l'inclinaison dans les deux sens.</li>
+          <li>Appuie sur <b>Figer</b> pour garder la valeur et retirer le téléphone sans la perdre.</li>
+        </ul>
+        <h3>Calibrage (important)</h3>
+        <p>Pose le téléphone sur une référence que tu sais parfaitement droite (bon niveau à bulle, fil à plomb), choisis le mode puis touche <b>Calibrer</b>. Refais-le si tu changes de téléphone ou de coque.</p>
+        <h3>Précision</h3>
+        <p>Environ 0,5° à 1° selon le téléphone. 1° correspond à environ 1,7 mm d'écart sur 10 cm. C'est suffisant pour un contrôle rapide, mais pas pour remplacer un niveau laser sur un travail exigeant.</p>
+        <h3>Astuces</h3>
+        <ul>
+          <li>Retire la coque épaisse, elle fausse le contact avec le mur.</li>
+          <li>Évite le bloc photo : ne prends pas appui dessus.</li>
+          <li>Éloigne-toi des vibrations (perceuse en marche).</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+<div id="toast"></div>
+
+<script>
+(function(){
+'use strict';
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const IOS=/iP(hone|ad|od)/.test(navigator.userAgent);
+const G=9.81, D=180/Math.PI;
+let camOn=false, mode='v', g={x:0,y:0,z:G}, first=true, gotData=false, locked=false, lockVal=null, lockExtra=null;
+let off={v:0,h:0,fx:0,fy:0}, hist=[], photoData=null, wasOk=false, audio=null;
+
+/* ---------- stockage ---------- */
+function load(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}
+function store(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}}
+off=Object.assign(off,load('ap_off',{}));
+hist=load('ap_hist',[]);
+const prefs=load('ap_prefs',{tol:'0.5',sound:true,vib:true});
+$('#tol').value=prefs.tol;$('#sound').checked=prefs.sound;$('#vib').checked=prefs.vib;
+function savePrefs(){store('ap_prefs',{tol:$('#tol').value,sound:$('#sound').checked,vib:$('#vib').checked})}
+['tol','sound','vib'].forEach(i=>$('#'+i).addEventListener('change',savePrefs));
+
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove('on'),2000)}
+
+/* ---------- visuels ---------- */
+const boxSvg=`<svg id="svgBox" width="260" height="220" viewBox="0 0 260 220">
+  <line x1="130" y1="6" x2="130" y2="214" stroke="#475569" stroke-width="2" stroke-dasharray="6 6" id="refV"/>
+  <line x1="10" y1="110" x2="250" y2="110" stroke="#475569" stroke-width="2" stroke-dasharray="6 6" id="refH" style="display:none"/>
+  <g id="boxG" style="transform-origin:130px 110px;transition:transform .08s linear">
+    <rect x="95" y="75" width="70" height="70" rx="10" fill="none" stroke="var(--state)" stroke-width="6"/>
+    <circle cx="130" cy="110" r="16" fill="none" stroke="var(--state)" stroke-width="5"/>
+    <circle cx="130" cy="110" r="3" fill="var(--state)"/>
+  </g>
+</svg>`;
+const flatSvg=`<svg id="svgFlat" width="240" height="240" viewBox="0 0 240 240" style="display:none">
+  <circle cx="120" cy="120" r="108" fill="none" stroke="#475569" stroke-width="3"/>
+  <circle cx="120" cy="120" r="54" fill="none" stroke="#334155" stroke-width="2"/>
+  <circle cx="120" cy="120" r="22" fill="none" stroke="var(--ok)" stroke-width="3" stroke-dasharray="4 4"/>
+  <line x1="120" y1="12" x2="120" y2="228" stroke="#334155" stroke-width="2"/>
+  <line x1="12" y1="120" x2="228" y2="120" stroke="#334155" stroke-width="2"/>
+  <circle id="bub" cx="120" cy="120" r="16" fill="var(--state)" opacity=".85"/>
+</svg>`;
+$('#vis').innerHTML=boxSvg+flatSvg;
+$('#gaugeWrap').innerHTML=`<svg width="100%" viewBox="0 0 300 40">
+  <rect x="10" y="16" width="280" height="8" rx="4" fill="#334155"/>
+  <rect id="gOk" x="145" y="14" width="10" height="12" rx="3" fill="var(--ok)"/>
+  <circle id="gMark" cx="150" cy="20" r="9" fill="var(--state)"/>
+  <text x="10" y="38" fill="#94a3b8" font-size="10">-5°</text>
+  <text x="150" y="38" fill="#94a3b8" font-size="10" text-anchor="middle">0</text>
+  <text x="290" y="38" fill="#94a3b8" font-size="10" text-anchor="end">+5°</text></svg>`;
+
+/* ---------- capteurs ---------- */
+function onMotion(e){
+  const a=e.accelerationIncludingGravity;
+  if(!a||a.x==null||a.y==null||a.z==null)return;
+  const s=IOS?-1:1, x=a.x*s, y=a.y*s, z=a.z*s;
+  if(first){g={x,y,z};first=false}
+  else{const k=.18;g.x+=(x-g.x)*k;g.y+=(y-g.y)*k;g.z+=(z-g.z)*k}
+  if(!gotData){gotData=true;$('#sensorState').textContent='capteur ✔'}
+}
+async function startSensors(){
+  try{
+    if(typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function'){
+      const r=await DeviceMotionEvent.requestPermission();
+      if(r!=='granted'){toast('Autorisation capteur refusée');return}
+    }
+  }catch(e){}
+  window.addEventListener('devicemotion',onMotion);
+  try{audio=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}
+  try{if(navigator.wakeLock)navigator.wakeLock.request('screen').catch(()=>{})}catch(e){}
+  $('#start').style.display='none';
+  setTimeout(()=>{if(!gotData){$('#sensorState').textContent='aucun capteur';showWarn("Aucune donnée du capteur. Vérifie que l'appli a accès aux capteurs de mouvement (en navigateur : ouvre la page en HTTPS).")}},2500);
+}
+$('#startBtn').addEventListener('click',startSensors);
+
+/* ---------- calculs ---------- */
+function fold(a){while(a>90)a-=180;while(a<-90)a+=180;return a}
+function raw(){
+  const theta=-Math.atan2(g.x,g.y)*D;            // rotation horaire dans le plan de l'écran
+  return {
+    v:fold(theta), h:fold(theta-90),
+    fx:Math.atan2(g.x,g.z)*D, fy:Math.atan2(g.y,g.z)*D,
+    flatness:Math.abs(g.z)/G
+  };
+}
+function measure(){
+  const r=raw();
+  if(mode==='v')return{val:r.v-off.v,flat:r.flatness};
+  if(mode==='h')return{val:fold(r.h-off.h),flat:r.flatness};
+  const tx=r.fx-off.fx, ty=r.fy-off.fy;
+  return{val:Math.hypot(tx,ty),tx,ty,flat:r.flatness};
+}
+function showWarn(t){const w=$('#warn');if(t){w.textContent=t;w.style.display='block'}else w.style.display='none'}
+const fmt=(n,d=1)=>n.toFixed(d).replace('.',',');
+
+/* ---------- rendu ---------- */
+let lastWarn='';
+function beep(){
+  if($('#sound').checked&&audio){try{const o=audio.createOscillator(),gn=audio.createGain();o.frequency.value=1000;gn.gain.value=.12;o.connect(gn);gn.connect(audio.destination);o.start();o.stop(audio.currentTime+.12)}catch(e){}}
+  if($('#vib').checked&&navigator.vibrate){try{navigator.vibrate(60)}catch(e){}}
+}
+function render(){
+  requestAnimationFrame(render);
+  const tol=parseFloat($('#tol').value);
+  let m=locked&&lockVal!=null?{val:lockVal,tx:lockExtra&&lockExtra.tx,ty:lockExtra&&lockExtra.ty,flat:0}:measure();
+  const v=m.val, a=Math.abs(v);
+  // avertissement orientation
+  let w='';
+  if(!locked&&gotData){
+    if(mode!=='f'&&m.flat>.75)w="Le téléphone est à plat : passe en mode « À plat » ou redresse-le contre le mur.";
+    else if(mode==='f'&&m.flat<.75)w="Pose le téléphone à plat pour ce mode.";
+  }
+  if(w!==lastWarn){lastWarn=w;if(w||gotData)showWarn(w)}
+  // état
+  const ok=a<=tol, mid=a<=tol*3;
+  const col=ok?'var(--ok)':(mid?'var(--warn)':'var(--bad)');
+  $('#card').style.setProperty('--state',col);
+  document.documentElement.style.setProperty('--state',col);
+  $('#val').textContent=(mode==='f'?'':(v>0.04?'+':v<-0.04?'−':''))+fmt(a)+'°';
+  $('#status').textContent=ok?'✔ DROIT':(mid?'Presque droit':'Pas droit');
+  $('#sub').textContent='≈ '+fmt(Math.tan(a/D)*100)+' mm d\'écart sur 10 cm  •  '+fmt(Math.tan(a/D)*1000)+' mm/m';
+  let hint='';
+  if(!ok){
+    if(mode==='v')hint=v>0?'Le haut penche à droite ↗ → corriger vers la gauche ↺':'Le haut penche à gauche ↖ → corriger vers la droite ↻';
+    else if(mode==='h')hint=v>0?'Le côté droit est trop bas ↘ → le monter':'Le côté gauche est trop bas ↙ → le monter';
+    else hint='Incline vers la bulle pour compenser';
+  }
+  $('#hint').textContent=hint;
+  // visuels
+  const isF=mode==='f';
+  $('#svgBox').style.display=isF?'none':'block';
+  $('#svgFlat').style.display=isF?'block':'none';
+  $('#refV').style.display=mode==='v'?'':'none';
+  $('#refH').style.display=mode==='h'?'':'none';
+  if(!isF){
+    const rot=Math.max(-45,Math.min(45,v));
+    $('#boxG').style.transform='rotate('+(mode==='h'?rot:rot)+'deg)';
+  }else if(m.tx!=null){
+    const sc=14, cx=Math.max(-90,Math.min(90,m.tx*sc)), cy=Math.max(-90,Math.min(90,-m.ty*sc));
+    const d=Math.hypot(cx,cy),k=d>90?90/d:1;
+    $('#bub').setAttribute('cx',120+cx*k);$('#bub').setAttribute('cy',120+cy*k);
+  }
+  // jauge linéaire (±5°)
+  const sv=isF?Math.min(a,5):Math.max(-5,Math.min(5,v));
+  $('#gMark').setAttribute('cx',150+sv*28);
+  const wOk=Math.min(2*tol*28,280);
+  $('#gOk').setAttribute('x',150-wOk/2);$('#gOk').setAttribute('width',wOk);
+  // son
+  if(ok&&!wasOk&&gotData&&!locked)beep();
+  wasOk=ok;
+  if(camOn)drawCam();
+}
+render();
+
+/* ---------- actions ---------- */
+$$('#v-mesure .seg button').forEach(b=>b.addEventListener('click',()=>{
+  mode=b.dataset.m;locked=false;lockVal=null;$('#lock').classList.remove('on');$('#lock').textContent='🔒 Figer';
+  $$('#v-mesure .seg button').forEach(x=>x.classList.toggle('on',x===b));
+}));
+$$('.tabs button').forEach(b=>b.addEventListener('click',()=>{
+  $$('.tabs button').forEach(x=>x.classList.toggle('on',x===b));
+  $$('.view').forEach(v=>v.classList.toggle('on',v.id==='v-'+b.dataset.v));
+  if(b.dataset.v==='histo')renderList();
+  if(b.dataset.v==='cam'){camOn=true;startCam()}
+  else if(camOn){camOn=false;stopCam()}
+}));
+$('#lock').addEventListener('click',()=>{
+  if(!locked){const m=measure();locked=true;lockVal=m.val;lockExtra={tx:m.tx,ty:m.ty};$('#lock').classList.add('on');$('#lock').textContent='🔓 Libérer'}
+  else{locked=false;lockVal=null;$('#lock').classList.remove('on');$('#lock').textContent='🔒 Figer'}
+});
+$('#calib').addEventListener('click',()=>{
+  const names={v:'vertical',h:'horizontal',f:'à plat'};
+  if(!confirm('Calibrage en mode '+names[mode]+' : pose le téléphone sur une référence parfaitement droite et ne bouge plus. Valider ?'))return;
+  const r=raw();
+  if(mode==='v')off.v=r.v;else if(mode==='h')off.h=r.h;else{off.fx=r.fx;off.fy=r.fy}
+  store('ap_off',off);toast('Calibrage enregistré ✔');
+});
+$('#resetCal').addEventListener('click',()=>{off={v:0,h:0,fx:0,fy:0};store('ap_off',off);toast('Calibrage réinitialisé')});
+
+/* photo */
+$('#photoBtn').addEventListener('click',()=>$('#photo').click());
+$('#photo').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  const img=new Image(),url=URL.createObjectURL(f);
+  img.onload=()=>{
+    const s=Math.min(1,420/Math.max(img.width,img.height)),c=document.createElement('canvas');
+    c.width=img.width*s;c.height=img.height*s;c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    photoData=c.toDataURL('image/jpeg',.6);URL.revokeObjectURL(url);
+    $('#photoInfo').textContent='Photo ajoutée ✔';
+  };
+  img.src=url;e.target.value='';
+});
+
+/* enregistrement */
+$('#save').addEventListener('click',()=>{
+  const m=locked&&lockVal!=null?{val:lockVal}:measure(), tol=parseFloat($('#tol').value);
+  const e={t:Date.now(),label:$('#label').value.trim()||'Sans nom',mode,val:m.val,tol,ok:Math.abs(m.val)<=tol,photo:photoData};
+  hist.unshift(e);hist=hist.slice(0,60);
+  let n=hist.filter(x=>x.photo).length;
+  while(!store('ap_hist',hist)&&n>0){ // espace plein : on retire les plus anciennes photos
+    for(let i=hist.length-1;i>=0;i--){if(hist[i].photo){hist[i].photo=null;break}}
+    n--;
+  }
+  photoData=null;$('#photoInfo').textContent='';$('#label').value='';
+  toast(e.ok?'Enregistré : droit ✔':'Enregistré : pas droit');
+});
+
+/* historique */
+const MN={v:'Vertical',h:'Horizontal',f:'À plat',c:'Caméra'};
+function renderList(){
+  const L=$('#list');
+  if(!hist.length){L.innerHTML='<div class="empty">Aucune vérification enregistrée.</div>';return}
+  L.innerHTML=hist.map((e,i)=>{
+    const d=new Date(e.t);
+    return `<div class="item">${e.photo?`<img src="${e.photo}" alt="">`:''}
+      <div class="t"><b>${esc(e.label)}</b>${MN[e.mode]} • ${fmt(Math.abs(e.val))}° • tol. ±${fmt(e.tol)}°<br><span style="color:#94a3b8">${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</span></div>
+      <span class="badge ${e.ok?'ok':'no'}">${e.ok?'DROIT':'À CORRIGER'}</span>
+      <button class="x" data-i="${i}" aria-label="Supprimer">✕</button></div>`}).join('');
+  $$('#list .x').forEach(b=>b.addEventListener('click',()=>{hist.splice(+b.dataset.i,1);store('ap_hist',hist);renderList()}));
+}
+function esc(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+$('#clearAll').addEventListener('click',()=>{if(hist.length&&confirm('Tout effacer ?')){hist=[];store('ap_hist',hist);renderList()}});
+$('#copyRep').addEventListener('click',async()=>{
+  if(!hist.length){toast('Rien à copier');return}
+  const txt='RAPPORT DE CONTRÔLE D\'APLOMB\n\n'+hist.slice().reverse().map(e=>{
+    const d=new Date(e.t);
+    return `${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})} | ${e.label} | ${MN[e.mode]} | ${fmt(Math.abs(e.val))}° (tol. ±${fmt(e.tol)}°) | ${e.ok?'DROIT':'À CORRIGER'}`}).join('\n');
+  try{
+    if(navigator.share){await navigator.share({title:'Rapport d\'aplomb',text:txt});return}
+    await navigator.clipboard.writeText(txt);toast('Rapport copié ✔');
+  }catch(e){
+    try{const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('Rapport copié ✔')}catch(_){toast('Copie impossible')}
+  }
+});
+/* ---------- caméra ---------- */
+let stream=null, camFacing='environment', camMode='v', boxAng=null, dragging=false;
+const camBox=$('#camBox'), camOv=$('#camOv'), camVideo=$('#cam');
+
+async function startCam(){
+  stopCam();
+  const msg=$('#camMsg');
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){msg.textContent='Caméra non disponible sur cet appareil.';msg.style.display='flex';return}
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:camFacing},width:{ideal:1280},height:{ideal:960}},audio:false});
+    camVideo.srcObject=stream;
+    try{await camVideo.play()}catch(e){}
+    msg.style.display='none';
+  }catch(e){
+    msg.textContent="Accès à la caméra refusé. Autorise la caméra pour l'appli dans les paramètres du téléphone.";
+    msg.style.display='flex';
+  }
+}
+function stopCam(){
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
+  camVideo.srcObject=null;
+}
+function camState(){
+  const th=-Math.atan2(g.x,g.y)*D, base=camMode==='v'?0:90, o=camMode==='v'?off.v:off.h;
+  const ref=base-(th-o);                       // angle écran de la vraie verticale/horizontale
+  const dev=boxAng==null?null:fold(boxAng-ref); // écart du boîtier par rapport au vrai aplomb/niveau
+  return{ref,dev};
+}
+function ln(ctx,w,h,deg,color,lw,dash){
+  const a=deg/D,L=Math.hypot(w,h),cx=w/2,cy=h/2;
+  ctx.beginPath();ctx.setLineDash(dash);ctx.strokeStyle=color;ctx.lineWidth=lw;
+  ctx.moveTo(cx-Math.sin(a)*L,cy+Math.cos(a)*L);ctx.lineTo(cx+Math.sin(a)*L,cy-Math.cos(a)*L);
+  ctx.stroke();ctx.setLineDash([]);
+}
+function drawOv(ctx,w,h,k,st,tol){
+  ctx.lineWidth=k;ctx.strokeStyle='rgba(255,255,255,.22)';
+  for(let i=1;i<3;i++){ctx.beginPath();ctx.moveTo(w*i/3,0);ctx.lineTo(w*i/3,h);ctx.moveTo(0,h*i/3);ctx.lineTo(w,h*i/3);ctx.stroke()}
+  ln(ctx,w,h,st.ref,'#38bdf8',2.5*k,[10*k,8*k]);
+  if(st.dev!=null){
+    const ok=Math.abs(st.dev)<=tol;
+    ln(ctx,w,h,boxAng,ok?'#22c55e':'#ef4444',3*k,[]);
+    ctx.fillStyle=ok?'#22c55e':'#ef4444';ctx.beginPath();ctx.arc(w/2,h/2,5*k,0,7);ctx.fill();
+  }
+}
+function drawCam(){
+  const r=camOv.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  const W=Math.round(r.width*dpr),H=Math.round(r.height*dpr);
+  if(!W||!H)return;
+  if(camOv.width!==W||camOv.height!==H){camOv.width=W;camOv.height=H}
+  const ctx=camOv.getContext('2d');ctx.clearRect(0,0,W,H);
+  const st=camState(),tol=parseFloat($('#tol').value);
+  drawOv(ctx,W,H,dpr,st,tol);
+  if(st.dev==null){
+    $('#camVal').textContent='—';$('#camVal').style.color='var(--mut)';
+    $('#camStatus').textContent='';$('#camHint').textContent='Place la ligne sur le boîtier';
+    return;
+  }
+  const a=Math.abs(st.dev),ok=a<=tol,mid=a<=tol*3,col=ok?'var(--ok)':mid?'var(--warn)':'var(--bad)';
+  $('#camVal').style.color=col;$('#camStatus').style.color=col;
+  $('#camVal').textContent=(st.dev>0.04?'+':st.dev<-0.04?'−':'')+fmt(a)+'°';
+  $('#camStatus').textContent=ok?'✔ DROIT':mid?'Presque droit':'Pas droit';
+  $('#camHint').textContent=ok?'':(camMode==='v'?(st.dev>0?'Le haut penche à droite ↗':'Le haut penche à gauche ↖'):(st.dev>0?'Le côté droit est trop bas ↘':'Le côté gauche est trop bas ↙'));
+}
+function setLine(e){
+  const r=camBox.getBoundingClientRect();
+  const dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2);
+  if(Math.hypot(dx,dy)<12)return;
+  boxAng=fold(Math.atan2(dx,-dy)*D);
+}
+camBox.addEventListener('pointerdown',e=>{dragging=true;try{camBox.setPointerCapture(e.pointerId)}catch(_){}setLine(e)});
+camBox.addEventListener('pointermove',e=>{if(dragging)setLine(e)});
+['pointerup','pointercancel'].forEach(t=>camBox.addEventListener(t,()=>{dragging=false}));
+$('#fm').addEventListener('click',()=>{if(boxAng==null)return toast("Place d'abord la ligne");boxAng=fold(boxAng-0.1)});
+$('#fp').addEventListener('click',()=>{if(boxAng==null)return toast("Place d'abord la ligne");boxAng=fold(boxAng+0.1)});
+$('#camFlip').addEventListener('click',()=>{camFacing=camFacing==='environment'?'user':'environment';startCam()});
+$$('#v-cam .seg button').forEach(b=>b.addEventListener('click',()=>{
+  camMode=b.dataset.c;boxAng=null;
+  $$('#v-cam .seg button').forEach(x=>x.classList.toggle('on',x===b));
+}));
+$('#camSave').addEventListener('click',()=>{
+  const st=camState();
+  if(st.dev==null){toast("Place d'abord la ligne sur le boîtier");return}
+  if(!camVideo.videoWidth){toast('Caméra pas encore prête');return}
+  const tol=parseFloat($('#tol').value),W=720,H=Math.round(W*camOv.clientHeight/camOv.clientWidth);
+  const c=document.createElement('canvas');c.width=W;c.height=H;
+  const ctx=c.getContext('2d'),vw=camVideo.videoWidth,vh=camVideo.videoHeight,s=Math.max(W/vw,H/vh);
+  ctx.drawImage(camVideo,(W-vw*s)/2,(H-vh*s)/2,vw*s,vh*s);
+  drawOv(ctx,W,H,W/camOv.clientWidth,st,tol);
+  const ok=Math.abs(st.dev)<=tol,label=$('#camLabel').value.trim()||'Sans nom';
+  ctx.fillStyle='rgba(0,0,0,.65)';ctx.fillRect(0,H-46,W,46);
+  ctx.fillStyle=ok?'#22c55e':'#ef4444';ctx.font='bold 26px sans-serif';
+  ctx.fillText((ok?'DROIT ':'À CORRIGER ')+fmt(Math.abs(st.dev))+'°  •  '+label,14,H-14);
+  const e={t:Date.now(),label,mode:'c',val:st.dev,tol,ok,photo:c.toDataURL('image/jpeg',.7)};
+  hist.unshift(e);hist=hist.slice(0,60);
+  let n=hist.filter(x=>x.photo).length;
+  while(!store('ap_hist',hist)&&n>0){
+    for(let i=hist.length-1;i>=0;i--){if(hist[i].photo){hist[i].photo=null;break}}
+    n--;
+  }
+  $('#camLabel').value='';
+  toast(ok?'Photo enregistrée : droit ✔':'Photo enregistrée : pas droit');
+});
+})();
+</script>
+</body>
+</html>
