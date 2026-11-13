@@ -133,28 +133,21 @@ input[type=text],select{width:100%;padding:11px;border-radius:10px;border:1px so
           <canvas id="camOv" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
           <div id="camMsg" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;text-align:center;padding:24px;color:#fcd34d;background:rgba(0,0,0,.85);font-size:15px;line-height:1.5"></div>
         </div>
-        <div class="row" style="margin-top:10px;text-align:center">
-          <div>
-            <div style="font-size:12px;color:var(--mut)">Trous haut / bas<br>(vertical)</div>
-            <div class="val" id="camV" style="font-size:38px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--mut)">—</div>
-            <div id="camVS" style="font-size:13px;font-weight:700;min-height:18px"></div>
-          </div>
-          <div>
-            <div style="font-size:12px;color:var(--mut)">Trous gauche / droite<br>(horizontal)</div>
-            <div class="val" id="camH" style="font-size:38px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--mut)">—</div>
-            <div id="camHS" style="font-size:13px;font-weight:700;min-height:18px"></div>
-          </div>
-        </div>
-        <div class="status" id="camStatus" style="text-align:center;margin-top:8px;font-size:19px"></div>
+        <div class="status" id="camStatus" style="text-align:center;margin-top:10px;font-size:20px">Recherche du boîtier…</div>
         <div class="hint" id="camHint" style="text-align:center"></div>
-        <div class="hint" style="margin:8px 0">Cadre le boîtier bien en face, entier à l'écran. L'appli repère seule les 4 trous de vis et compare chaque paire à la vraie verticale et à la vraie horizontale (lignes bleues).</div>
-        <div class="row">
-          <button class="btn" id="camManual">✋ Placer à la main</button>
-          <button class="btn" id="camFlip">🔄 Caméra</button>
+        <div id="camList" style="margin-top:6px"></div>
+        <div class="hint" id="camRow" style="text-align:center;margin-top:4px"></div>
+        <div class="warn" id="camWarn" style="margin-top:8px"></div>
+        <button class="btn ok" id="camSave" style="width:100%;margin-top:10px;padding:16px;font-size:17px">📸 Capturer</button>
+        <div class="row" style="margin-top:8px">
+          <button class="btn" id="camAuto">⚡ Capture auto : NON</button>
+          <button class="btn" id="camManual">🤖 Détection auto</button>
         </div>
-        <label>Repère (pièce, prise, étage…)</label>
-        <input type="text" id="camLabel" placeholder="Ex : Cuisine – prise plan de travail">
-        <button class="btn ok" id="camSave" style="width:100%;margin-top:10px">📸 Capturer et enregistrer</button>
+        <div class="row" style="margin-top:8px">
+          <div><label>Repère (facultatif)</label><input type="text" id="camLabel" placeholder="Numéroté tout seul"></div>
+          <div><label>Largeur d'un boîtier (mm)</label><input type="text" id="camBW" inputmode="numeric"></div>
+        </div>
+        <div class="hint" style="margin-top:8px">Cadre le ou les boîtiers entiers à l'écran, sans te soucier de l'inclinaison du téléphone : elle est corrigée par le capteur. L'appli repère seule les 4 trous de chaque boîtier. Pour un coffret, utilise « Placer à la main » (4 coins).</div>
       </div>
     </section>
 
@@ -399,13 +392,14 @@ $('#save').addEventListener('click',()=>{
 
 /* historique */
 const MN={v:'Vertical',h:'Horizontal',f:'À plat',c:'Caméra'};
+function desc(e){if(e.n)return e.n+' boîtier'+(e.n>1?'s':'')+' • écart max '+fmt(Math.abs(e.val))+'°'+(e.rowTxt?' • '+e.rowTxt:'');return fmt(Math.abs(e.val))+'°'}
 function renderList(){
   const L=$('#list');
   if(!hist.length){L.innerHTML='<div class="empty">Aucune vérification enregistrée.</div>';return}
   L.innerHTML=hist.map((e,i)=>{
     const d=new Date(e.t);
     return `<div class="item">${e.photo?`<img src="${e.photo}" alt="">`:''}
-      <div class="t"><b>${esc(e.label)}</b>${MN[e.mode]} • ${e.vv!=null?'V '+fmt(Math.abs(e.vv))+'° / H '+fmt(Math.abs(e.hh))+'°':fmt(Math.abs(e.val))+'°'} • tol. ±${fmt(e.tol)}°<br><span style="color:#94a3b8">${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</span></div>
+      <div class="t"><b>${esc(e.label)}</b>${MN[e.mode]} • ${desc(e)} • tol. ±${fmt(e.tol)}°<br><span style="color:#94a3b8">${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</span></div>
       <span class="badge ${e.ok?'ok':'no'}">${e.ok?'DROIT':'À CORRIGER'}</span>
       <button class="x" data-i="${i}" aria-label="Supprimer">✕</button></div>`}).join('');
   $$('#list .x').forEach(b=>b.addEventListener('click',()=>{hist.splice(+b.dataset.i,1);store('ap_hist',hist);renderList()}));
@@ -416,7 +410,7 @@ $('#copyRep').addEventListener('click',async()=>{
   if(!hist.length){toast('Rien à copier');return}
   const txt='RAPPORT DE CONTRÔLE D\'APLOMB\n\n'+hist.slice().reverse().map(e=>{
     const d=new Date(e.t);
-    return `${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})} | ${e.label} | ${MN[e.mode]} | ${e.vv!=null?'V '+fmt(Math.abs(e.vv))+'° / H '+fmt(Math.abs(e.hh))+'°':fmt(Math.abs(e.val))+'°'} (tol. ±${fmt(e.tol)}°) | ${e.ok?'DROIT':'À CORRIGER'}`}).join('\n');
+    return `${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})} | ${e.label} | ${MN[e.mode]} | ${desc(e)} (tol. ±${fmt(e.tol)}°) | ${e.ok?'DROIT':'À CORRIGER'}`}).join('\n');
   try{
     if(navigator.share){await navigator.share({title:'Rapport d\'aplomb',text:txt});return}
     await navigator.clipboard.writeText(txt);toast('Rapport copié ✔');
@@ -424,22 +418,26 @@ $('#copyRep').addEventListener('click',async()=>{
     try{const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('Rapport copié ✔')}catch(_){toast('Copie impossible')}
   }
 });
-/* ---------- caméra : détection automatique des 4 trous de vis ---------- */
-let stream=null, camFacing='environment', pts=null, miss=0, manual=false, mPts=[], detTimer=null;
+/* ---------- caméra : détection auto, correction d'inclinaison, rangées de boîtiers ---------- */
+let stream=null, detTimer=null, miss=0, boxes=[], bufs=[], st=[], rowInfo=null, manual=0, mPts=[], autoCap=false, armed=true, lastSig=null, lastHtml='';
+let BW=Number(load('ap_bw',70))||70;
 const camBox=$('#camBox'), camOv=$('#camOv'), camVideo=$('#cam');
 const grab=document.createElement('canvas'), gctx=grab.getContext('2d',{willReadFrequently:true});
-const NAMES=['haut','bas','gauche','droite'], KEYS=['top','bottom','left','right'];
+const KEYS=['top','bottom','left','right'];
+const MAN=[null,['haut','bas','gauche','droite'],['coin haut-gauche','coin haut-droit','coin bas-gauche','coin bas-droit']];
+$('#camBW').value=BW;
+$('#camBW').addEventListener('change',e=>{const v=parseFloat(String(e.target.value).replace(',','.'));if(v>10&&v<2000){BW=v;store('ap_bw',v)}else e.target.value=BW});
 
 async function startCam(){
   stopCam();
   const msg=$('#camMsg');
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){msg.textContent='Caméra non disponible sur cet appareil.';msg.style.display='flex';return}
   try{
-    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:camFacing},width:{ideal:1280},height:{ideal:960}},audio:false});
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:960}},audio:false});
     camVideo.srcObject=stream;
     try{await camVideo.play()}catch(e){}
     msg.style.display='none';
-    detTimer=setInterval(detectTick,150);
+    detTimer=setInterval(tick,150);
   }catch(e){
     msg.textContent="Accès à la caméra refusé. Autorise la caméra pour l'appli dans les paramètres du téléphone.";
     msg.style.display='flex';
@@ -448,22 +446,23 @@ async function startCam(){
 function stopCam(){
   clearInterval(detTimer);detTimer=null;
   if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
-  camVideo.srcObject=null;pts=null;miss=0;
+  camVideo.srcObject=null;boxes=[];bufs=[];st=[];rowInfo=null;miss=0;
 }
 
-/* Repère le boîtier bleu, puis le centre des 4 trous (haut, bas, gauche, droite). Renvoie des coordonnées normalisées 0..1 ou null. */
-function detectBox(d,w,h){
+/* Repère tous les boîtiers bleus de l'image et le centre de leurs 4 trous (haut, bas, gauche, droite).
+   Coordonnées normalisées 0..1, boîtiers triés de gauche à droite. */
+function detectBoxes(d,w,h){
   const n=w*h, luma=new Float32Array(n), m=new Uint8Array(n);
   for(let i=0,p=0;i<n;i++,p+=4){
     const r=d[p],g2=d[p+1],b=d[p+2], mx=Math.max(r,g2,b), mn=Math.min(r,g2,b);
     luma[i]=.3*r+.59*g2+.11*b;
     if(b>r+20&&b>=g2-5&&mx>0&&(mx-mn)/mx>.25)m[i]=1;
   }
-  const t=new Uint8Array(n), q=new Uint8Array(n);                  // dilatation 3x3
+  const t=new Uint8Array(n), q=new Uint8Array(n);
   for(let y=0;y<h;y++)for(let x=1;x<w-1;x++){const i=y*w+x;t[i]=m[i-1]|m[i]|m[i+1]}
   for(let y=1;y<h-1;y++)for(let x=0;x<w;x++){const i=y*w+x;q[i]=t[i-w]|t[i]|t[i+w]}
-  const lab=new Int32Array(n), stack=new Int32Array(n);            // plus grand composant bleu
-  let best=0,bestId=0,id=0;
+  const lab=new Int32Array(n), stack=new Int32Array(n), cnts=[0];
+  let id=0,best=0;
   for(let s=0;s<n;s++){
     if(!q[s]||lab[s])continue;
     id++;let sp=0,cnt=0;stack[sp++]=s;lab[s]=id;
@@ -474,17 +473,26 @@ function detectBox(d,w,h){
       if(i>=w&&q[i-w]&&!lab[i-w]){lab[i-w]=id;stack[sp++]=i-w}
       if(i<n-w&&q[i+w]&&!lab[i+w]){lab[i+w]=id;stack[sp++]=i+w}
     }
-    if(cnt>best){best=cnt;bestId=id}
+    cnts[id]=cnt;if(cnt>best)best=cnt;
   }
-  if(best<n*0.01)return null;
-  const hx=new Int32Array(w), hy=new Int32Array(h);
-  for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(lab[y*w+x]===bestId){hx[x]++;hy[y]++}
-  const pct=(hist,p)=>{let c=0;const tg=best*p;for(let i=0;i<hist.length;i++){c+=hist[i];if(c>=tg)return i}return hist.length-1};
-  const x0=pct(hx,.03),x1=pct(hx,.97),y0=pct(hy,.03),y1=pct(hy,.97);
-  const W=x1-x0,H=y1-y0;
-  if(W<24||H<24||W/H<.6||W/H>1.6)return null;                       // pas un boîtier carré
-  const S=(W+H)/2, cx=(x0+x1)/2, cy=(y0+y1)/2, rad=.07*S;
-  const refine=(px,py)=>{
+  if(best<n*.003)return [];
+  const ids=[];
+  for(let k=1;k<cnts.length;k++)if(cnts[k]>=Math.max(n*.002,.25*best))ids.push(k);
+  ids.sort((a,b)=>cnts[b]-cnts[a]);ids.length=Math.min(ids.length,8);
+  const sel=new Int32Array(cnts.length).fill(-1);ids.forEach((k,j)=>sel[k]=j);
+  const hxs=ids.map(()=>new Int32Array(w));
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){const l=lab[y*w+x];if(l&&sel[l]>=0)hxs[sel[l]][x]++}
+  const pc=(arr,lo,hi,tot,p)=>{let acc=0;const tg=tot*p;for(let i=lo;i<=hi;i++){acc+=arr[i];if(acc>=tg)return i}return hi};
+  const bbox=(idc,k,xa,xb)=>{
+    const hx=hxs[k];let c=0;for(let x=xa;x<=xb;x++)c+=hx[x];
+    if(!c)return null;
+    const x0=pc(hx,xa,xb,c,.03),x1=pc(hx,xa,xb,c,.97);
+    const hy=new Int32Array(h);let c2=0;
+    for(let x=x0;x<=x1;x++)for(let y=0;y<h;y++)if(lab[y*w+x]===idc){hy[y]++;c2++}
+    if(!c2)return null;
+    return{x0,x1,y0:pc(hy,0,h-1,c2,.03),y1:pc(hy,0,h-1,c2,.97)};
+  };
+  const refine=(px,py,rad)=>{
     for(let it=0;it<3;it++){
       const xa=Math.max(0,Math.floor(px-rad)),xb=Math.min(w-1,Math.ceil(px+rad)),ya=Math.max(0,Math.floor(py-rad)),yb=Math.min(h-1,Math.ceil(py+rad));
       const v=[];
@@ -502,40 +510,144 @@ function detectBox(d,w,h){
     }
     return [px/w,py/h];
   };
-  const top=refine(cx,y0+.07*H), bottom=refine(cx,y0+.94*H), left=refine(x0+.02*W,cy+.02*H), right=refine(x0+.98*W,cy+.02*H);
-  if(!top||!bottom||!left||!right)return null;
-  return {top,bottom,left,right};
-}
-function detectTick(){
-  if(!camOn||manual||!camVideo.videoWidth)return;
-  const vw=camVideo.videoWidth,vh=camVideo.videoHeight,sc=Math.min(1,800/Math.max(vw,vh));
-  const w=Math.round(vw*sc),h=Math.round(vh*sc);
-  if(grab.width!==w||grab.height!==h){grab.width=w;grab.height=h}
-  gctx.drawImage(camVideo,0,0,w,h);
-  let res=null;
-  try{res=detectBox(gctx.getImageData(0,0,w,h).data,w,h)}catch(e){}
-  if(res){
-    miss=0;
-    if(!pts)pts=res;
-    else KEYS.forEach(k=>{pts[k]=[pts[k][0]+(res[k][0]-pts[k][0])*.4,pts[k][1]+(res[k][1]-pts[k][1])*.4]});
-  }else if(++miss>8)pts=null;
+  const out=[];
+  const make=(idc,k,xa,xb)=>{
+    const b=bbox(idc,k,xa,xb);if(!b)return;
+    const W=b.x1-b.x0,H=b.y1-b.y0;
+    if(W<24||H<24||W/H<.6||W/H>1.6)return;
+    const S=(W+H)/2,cx=(b.x0+b.x1)/2,cy=(b.y0+b.y1)/2,rad=.07*S;
+    const top=refine(cx,b.y0+.07*H,rad),bottom=refine(cx,b.y0+.94*H,rad),left=refine(b.x0+.02*W,cy+.02*H,rad),right=refine(b.x0+.98*W,cy+.02*H,rad);
+    if(top&&bottom&&left&&right)out.push({top,bottom,left,right,cx});
+  };
+  ids.forEach((idc,k)=>{
+    const b=bbox(idc,k,0,w-1);if(!b)return;
+    const ratio=(b.x1-b.x0)/Math.max(1,b.y1-b.y0);
+    if(ratio>1.6){                                   // boîtiers collés : on découpe la rangée
+      const parts=Math.min(8,Math.max(2,Math.round(ratio)));
+      for(let i=0;i<parts;i++)make(idc,k,Math.floor(b.x0+(b.x1-b.x0)*i/parts),Math.ceil(b.x0+(b.x1-b.x0)*(i+1)/parts)-1);
+    }else make(idc,k,0,w-1);
+  });
+  out.sort((a,b)=>a.cx-b.cx);
+  return out.map(o=>({top:o.top,bottom:o.bottom,left:o.left,right:o.right}));
 }
 
-/* ---------- angles par rapport à la vraie verticale / horizontale ---------- */
-function curPts(){
-  if(manual)return mPts.length===4?{top:mPts[0],bottom:mPts[1],left:mPts[2],right:mPts[3]}:null;
-  return pts;
+/*MATH-START*/
+/* Angle d'un boîtier par rapport à la vraie verticale / horizontale, quelle que soit l'inclinaison du téléphone.
+   Le capteur donne la direction du « haut » ; on s'en sert pour calculer le point de fuite des verticales. */
+function camDevs(P,vw,vh){
+  const f=.75*Math.max(vw,vh), m=Math.hypot(g.x,g.y,g.z)||1, ux=g.x/m, uy=-g.y/m, uz=-g.z/m;
+  const q=k=>[(P[k][0]-.5)*vw,(P[k][1]-.5)*vh];
+  const T=q('top'),B=q('bottom'),L=q('left'),R=q('right');
+  const mv=[(T[0]+B[0])/2,(T[1]+B[1])/2], mh=[(L[0]+R[0])/2,(L[1]+R[1])/2];
+  let dv=[f*ux-mv[0]*uz,f*uy-mv[1]*uz]; if(dv[1]>0)dv=[-dv[0],-dv[1]];
+  const v=fold(Math.atan2(T[0]-B[0],B[1]-T[1])*D-Math.atan2(dv[0],-dv[1])*D);
+  let nx=-uz*ux,ny=-uz*uy,nz=1-uz*uz;const nn=Math.hypot(nx,ny,nz);
+  if(nn<.2)return null;
+  nx/=nn;ny/=nn;nz/=nn;
+  const tx=uy*nz-uz*ny,ty=uz*nx-ux*nz,tz=ux*ny-uy*nx;
+  let dh=[f*tx-mh[0]*tz,f*ty-mh[1]*tz];if(dh[0]<0)dh=[-dh[0],-dh[1]];
+  const h=fold(Math.atan2(R[1]-L[1],R[0]-L[0])*D-Math.atan2(dh[1],dh[0])*D);
+  const wpx=Math.hypot(R[0]-L[0],R[1]-L[1]), hpx=Math.hypot(T[0]-B[0],T[1]-B[1]);
+  return{v,h,dv,dh,mv,mh,wpx,hpx,facing:(wpx/hpx)*Math.sqrt(Math.max(0,1-uz*uz))};
 }
-function camAngles(){
-  const P=curPts();
-  if(!P||!camVideo.videoWidth)return null;
+/* Alignement d'une rangée de boîtiers côte à côte : pente, décalage vertical et régularité de l'espacement */
+function rowAnalysis(P,vw,vh,bw){
+  if(P.length<2)return null;
+  const c=P.map(b=>{const a=KEYS.map(k=>[(b[k][0]-.5)*vw,(b[k][1]-.5)*vh]);return[a.reduce((s,p)=>s+p[0],0)/4,a.reduce((s,p)=>s+p[1],0)/4]});
+  const n=c.length,mx=c.reduce((s,p)=>s+p[0],0)/n,my=c.reduce((s,p)=>s+p[1],0)/n;
+  let sxx=0,sxy=0;c.forEach(p=>{sxx+=(p[0]-mx)*(p[0]-mx);sxy+=(p[0]-mx)*(p[1]-my)});
+  if(sxx<1)return null;
+  const slope=sxy/sxx, ang=Math.atan(slope)*D;
+  const f=.75*Math.max(vw,vh), m=Math.hypot(g.x,g.y,g.z)||1, ux=g.x/m, uy=-g.y/m, uz=-g.z/m;
+  let nx=-uz*ux,ny=-uz*uy,nz=1-uz*uz;const nn=Math.hypot(nx,ny,nz);if(nn<.2)return null;
+  nx/=nn;ny/=nn;nz/=nn;
+  const tx=uy*nz-uz*ny,ty=uz*nx-ux*nz,tz=ux*ny-uy*nx;
+  let dh=[f*tx-mx*tz,f*ty-my*tz];if(dh[0]<0)dh=[-dh[0],-dh[1]];
+  const dev=fold(ang-Math.atan2(dh[1],dh[0])*D);
+  const wpx=P.reduce((s,b)=>s+Math.hypot((b.right[0]-b.left[0])*vw,(b.right[1]-b.left[1])*vh),0)/n;
+  const mmpx=bw/wpx, cs=Math.cos(Math.atan(slope)), sn=Math.sin(Math.atan(slope));
+  const off=c.map(p=>(-(p[0]-mx)*sn+(p[1]-my)*cs)*mmpx);          // décalage perpendiculaire à la droite moyenne
+  const along=c.map(p=>((p[0]-mx)*cs+(p[1]-my)*sn)*mmpx);
+  const gaps=[];for(let i=1;i<n;i++)gaps.push(along[i]-along[i-1]);
+  return{dev,maxOff:Math.max(...off.map(Math.abs)),gapSpread:Math.max(...gaps)-Math.min(...gaps),offs:off,gaps};
+}
+/*MATH-END*/
+
+/* ---------- boucle de détection (toutes les 150 ms) ---------- */
+const med=a=>{const s=a.slice().sort((x,y)=>x-y),k=s.length>>1;return s.length%2?s[k]:(s[k-1]+s[k])/2};
+function manualBox(){
+  if(mPts.length<4)return null;
+  const p=mPts,mid=(a,b)=>[(a[0]+b[0])/2,(a[1]+b[1])/2];
+  return manual===1?{top:p[0],bottom:p[1],left:p[2],right:p[3]}
+                   :{top:mid(p[0],p[1]),bottom:mid(p[2],p[3]),left:mid(p[0],p[2]),right:mid(p[1],p[3])};
+}
+function tick(){
+  if(!camOn||!camVideo.videoWidth)return;
   const vw=camVideo.videoWidth,vh=camVideo.videoHeight;
-  const px=k=>[P[k][0]*vw,P[k][1]*vh];
-  const T=px('top'),B=px('bottom'),L=px('left'),R=px('right');
-  const vS=Math.atan2(T[0]-B[0],B[1]-T[1])*D;     // + : le haut penche à droite (sur l'image)
-  const hS=Math.atan2(R[1]-L[1],R[0]-L[0])*D;     // + : le côté droit est plus bas (sur l'image)
-  const th=-Math.atan2(g.x,g.y)*D;                // rotation du téléphone (capteur)
-  return{devV:fold(vS+th-off.v),devH:fold(hS+th-off.h),th};
+  let res=null;
+  if(manual){const mb=manualBox();res=mb?[mb]:[]}
+  else{
+    const sc=Math.min(1,800/Math.max(vw,vh)),w=Math.round(vw*sc),h=Math.round(vh*sc);
+    if(grab.width!==w||grab.height!==h){grab.width=w;grab.height=h}
+    gctx.drawImage(camVideo,0,0,w,h);
+    try{res=detectBoxes(gctx.getImageData(0,0,w,h).data,w,h)}catch(e){res=[]}
+  }
+  if(res.length){
+    miss=0;
+    if(res.length!==boxes.length){boxes=res;bufs=res.map(()=>[])}
+    else boxes.forEach((b,i)=>KEYS.forEach(k=>{b[k]=[b[k][0]+(res[i][k][0]-b[k][0])*.4,b[k][1]+(res[i][k][1]-b[k][1])*.4]}));
+  }else if(++miss>8){boxes=[];bufs=[]}
+  // angles de chaque boîtier, médiane sur ~1 s pour absorber le tremblement de la main
+  const tol=parseFloat($('#tol').value);
+  st=boxes.map((b,i)=>{
+    const r=camDevs(b,vw,vh);if(!r)return null;
+    const bf=bufs[i];bf.push([r.v,r.h]);if(bf.length>8)bf.shift();
+    const v=fold(med(bf.map(x=>x[0]))-off.v),h=fold(med(bf.map(x=>x[1]))-off.h);
+    const spread=Math.max(Math.max(...bf.map(x=>x[0]))-Math.min(...bf.map(x=>x[0])),Math.max(...bf.map(x=>x[1]))-Math.min(...bf.map(x=>x[1])));
+    return{v,h,facing:r.facing,spread,n:bf.length,okV:Math.abs(v)<=tol,okH:Math.abs(h)<=tol,r};
+  });
+  rowInfo=boxes.length>1?rowAnalysis(boxes,vw,vh,BW):null;
+  updateReadout(tol);
+  autoCapture();
+}
+
+/* ---------- affichage ---------- */
+const colOf=(a,tol)=>a<=tol?'#22c55e':(a<=tol*3?'#f59e0b':'#ef4444');
+const sg=x=>(x>0.04?'+':x<-0.04?'−':'')+fmt(Math.abs(x))+'°';
+function verdict(tol){
+  const ok=st.length&&st.every(s=>s&&s.okV&&s.okH)&&(!rowInfo||(Math.abs(rowInfo.dev)<=tol&&rowInfo.maxOff<=2));
+  return !!ok;
+}
+function updateReadout(tol){
+  const S=$('#camStatus'),H=$('#camHint'),L=$('#camList'),R=$('#camRow'),W=$('#camWarn');
+  const valid=st.filter(Boolean);
+  if(!valid.length){
+    S.textContent=manual?'Touche les points sur l\'image':'Recherche du boîtier…';S.style.color='var(--mut)';
+    H.textContent=manual?('Touche : '+MAN[manual][Math.min(mPts.length,3)]+' ('+(Math.min(mPts.length,3)+1)+'/4)'):'Cadre le boîtier entier, bien visible';
+    if(lastHtml!==''){L.innerHTML='';lastHtml=''}
+    R.textContent='';W.style.display='none';return;
+  }
+  const ok=verdict(tol);
+  const worst=Math.max(...valid.map(s=>Math.max(Math.abs(s.v),Math.abs(s.h))),rowInfo?Math.abs(rowInfo.dev):0);
+  S.textContent=ok?(valid.length>1?'✔ TOUT EST DROIT':'✔ BOÎTIER DROIT'):(worst<=tol*3?'Presque droit':'Pas droit');
+  S.style.color=ok?'var(--ok)':colOf(worst,tol);
+  let hint=[];
+  st.forEach((s,i)=>{if(!s)return;const nm=st.length>1?'Boîtier '+(i+1)+' : ':'';
+    if(!s.okV)hint.push(nm+(s.v>0?'le haut penche à droite ↗':'le haut penche à gauche ↖'));
+    if(!s.okH)hint.push(nm+(s.h>0?'côté droit trop bas ↘':'côté gauche trop bas ↙'))});
+  H.textContent=hint.slice(0,2).join(' • ');
+  let html='';
+  st.forEach((s,i)=>{if(!s)return;
+    html+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 4px;border-top:1px solid var(--line);font-size:15px"><b>${st.length>1?'Boîtier '+(i+1):'Mesure'}</b><span>Vertical <b style="color:${colOf(Math.abs(s.v),tol)}">${sg(s.v)}</b></span><span>Horizontal <b style="color:${colOf(Math.abs(s.h),tol)}">${sg(s.h)}</b></span></div>`});
+  if(html!==lastHtml){L.innerHTML=html;lastHtml=html}
+  if(rowInfo){
+    const c=rowInfo.maxOff<=2?'var(--ok)':rowInfo.maxOff<=4?'var(--warn)':'var(--bad)';
+    R.innerHTML=`Rangée de ${boxes.length} : pente <b style="color:${colOf(Math.abs(rowInfo.dev),tol)}">${sg(rowInfo.dev)}</b> • décalage max <b style="color:${c}">${fmt(rowInfo.maxOff)} mm</b> • espacement ±<b>${fmt(rowInfo.gapSpread/2)} mm</b>`;
+  }else R.textContent='';
+  const bad=valid.find(s=>s.facing<.88);
+  if(bad){W.textContent='Place-toi bien en face du boîtier : de biais, la mesure horizontale est moins fiable.';W.style.display='block'}
+  else if(valid.some(s=>s.n<4)){W.textContent='Mesure en cours… garde le boîtier dans le cadre.';W.style.display='block'}
+  else W.style.display='none';
 }
 function ln(ctx,cx,cy,len,deg,color,lw,dash){
   const a=deg/D;
@@ -543,37 +655,29 @@ function ln(ctx,cx,cy,len,deg,color,lw,dash){
   ctx.moveTo(cx-Math.sin(a)*len,cy+Math.cos(a)*len);ctx.lineTo(cx+Math.sin(a)*len,cy-Math.cos(a)*len);
   ctx.stroke();ctx.setLineDash([]);
 }
-const colOf=(a,tol)=>a<=tol?'#22c55e':(a<=tol*3?'#f59e0b':'#ef4444');
-/* dessine sur un canvas de taille W×H, avec la vidéo « cover » (vw×vh) */
-function drawOv(ctx,W,H,k,A,tol){
+function drawOv(ctx,W,H,k,tol){
   const vw=camVideo.videoWidth||W,vh=camVideo.videoHeight||H,s=Math.max(W/vw,H/vh),ox=(W-vw*s)/2,oy=(H-vh*s)/2;
   const X=u=>ox+u*vw*s,Y=v=>oy+v*vh*s;
-  ctx.lineWidth=k;ctx.strokeStyle='rgba(255,255,255,.2)';
+  ctx.lineWidth=k;ctx.strokeStyle='rgba(255,255,255,.18)';
   for(let i=1;i<3;i++){ctx.beginPath();ctx.moveTo(W*i/3,0);ctx.lineTo(W*i/3,H);ctx.moveTo(0,H*i/3);ctx.lineTo(W,H*i/3);ctx.stroke()}
-  const P=curPts();
-  let cx=W/2,cy=H/2;
-  if(P){cx=X((P.top[0]+P.bottom[0]+P.left[0]+P.right[0])/4);cy=Y((P.top[1]+P.bottom[1]+P.left[1]+P.right[1])/4)}
-  const th=-Math.atan2(g.x,g.y)*D, L=Math.hypot(W,H);
-  ln(ctx,cx,cy,L,-(th-off.v),'#38bdf8',2.5*k,[10*k,8*k]);        // vraie verticale
-  ln(ctx,cx,cy,L,90-(th-off.h),'#38bdf8',2.5*k,[10*k,8*k]);      // vraie horizontale
-  if(P&&A){
-    const cv=colOf(Math.abs(A.devV),tol),ch=colOf(Math.abs(A.devH),tol);
+  boxes.forEach((b,i)=>{
+    const S=st[i];if(!S)return;
+    const cv=colOf(Math.abs(S.v),tol),ch=colOf(Math.abs(S.h),tol);
+    const size=Math.hypot(X(b.right[0])-X(b.left[0]),Y(b.right[1])-Y(b.left[1]));
+    const cx=(X(b.top[0])+X(b.bottom[0])+X(b.left[0])+X(b.right[0]))/4,cy=(Y(b.top[1])+Y(b.bottom[1])+Y(b.left[1])+Y(b.right[1]))/4;
+    // vraies verticale et horizontale (corrigées de l'inclinaison du téléphone)
+    ln(ctx,cx,cy,size*.95,Math.atan2(S.r.dv[0],-S.r.dv[1])*D,'#38bdf8',2*k,[8*k,6*k]);
+    ln(ctx,cx,cy,size*.95,90+Math.atan2(S.r.dh[1],S.r.dh[0])*D,'#38bdf8',2*k,[8*k,6*k]);
     ctx.lineWidth=3*k;
-    ctx.strokeStyle=cv;ctx.beginPath();ctx.moveTo(X(P.top[0]),Y(P.top[1]));ctx.lineTo(X(P.bottom[0]),Y(P.bottom[1]));ctx.stroke();
-    ctx.strokeStyle=ch;ctx.beginPath();ctx.moveTo(X(P.left[0]),Y(P.left[1]));ctx.lineTo(X(P.right[0]),Y(P.right[1]));ctx.stroke();
-    [['top',cv],['bottom',cv],['left',ch],['right',ch]].forEach(([n,c])=>{
+    ctx.strokeStyle=cv;ctx.beginPath();ctx.moveTo(X(b.top[0]),Y(b.top[1]));ctx.lineTo(X(b.bottom[0]),Y(b.bottom[1]));ctx.stroke();
+    ctx.strokeStyle=ch;ctx.beginPath();ctx.moveTo(X(b.left[0]),Y(b.left[1]));ctx.lineTo(X(b.right[0]),Y(b.right[1]));ctx.stroke();
+    [['top',cv],['bottom',cv],['left',ch],['right',ch]].forEach(([nm,c])=>{
       ctx.fillStyle=c;ctx.strokeStyle='#fff';ctx.lineWidth=1.5*k;
-      ctx.beginPath();ctx.arc(X(P[n][0]),Y(P[n][1]),6*k,0,7);ctx.fill();ctx.stroke();
+      ctx.beginPath();ctx.arc(X(b[nm][0]),Y(b[nm][1]),5*k,0,7);ctx.fill();ctx.stroke();
     });
-  }else if(manual){
-    mPts.forEach(p=>{ctx.fillStyle='#38bdf8';ctx.beginPath();ctx.arc(X(p[0]),Y(p[1]),6*k,0,7);ctx.fill()});
-  }
-}
-function setRead(idV,idS,dev,tol){
-  const a=Math.abs(dev),c=colOf(a,tol),e=$('#'+idV),s=$('#'+idS);
-  e.style.color=c;s.style.color=c;
-  e.textContent=(dev>0.04?'+':dev<-0.04?'−':'')+fmt(a)+'°';
-  s.textContent=a<=tol?'✔ aligné':(a<=tol*3?'presque':'décalé');
+    if(boxes.length>1){ctx.fillStyle='#fff';ctx.strokeStyle='#000';ctx.lineWidth=3*k;ctx.font='bold '+(16*k)+'px sans-serif';ctx.strokeText(String(i+1),cx-5*k,cy-size*.62);ctx.fillText(String(i+1),cx-5*k,cy-size*.62)}
+  });
+  if(manual&&mPts.length<4)mPts.forEach(p=>{ctx.fillStyle='#38bdf8';ctx.beginPath();ctx.arc(X(p[0]),Y(p[1]),6*k,0,7);ctx.fill()});
 }
 function drawCam(){
   const r=camOv.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
@@ -581,65 +685,77 @@ function drawCam(){
   if(!W||!H)return;
   if(camOv.width!==W||camOv.height!==H){camOv.width=W;camOv.height=H}
   const ctx=camOv.getContext('2d');ctx.clearRect(0,0,W,H);
-  const A=camAngles(),tol=parseFloat($('#tol').value);
-  drawOv(ctx,W,H,dpr,A,tol);
-  if(!A){
-    ['camV','camH'].forEach(i=>{$('#'+i).textContent='—';$('#'+i).style.color='var(--mut)'});
-    $('#camVS').textContent='';$('#camHS').textContent='';$('#camStatus').textContent='';
-    $('#camHint').textContent=manual?('Touche le trou du '+NAMES[Math.min(mPts.length,3)]+' ('+(mPts.length+1)+'/4)'):'Recherche du boîtier… cadre-le bien en face, entier à l\'écran';
-    return;
-  }
-  setRead('camV','camVS',A.devV,tol);setRead('camH','camHS',A.devH,tol);
-  const aV=Math.abs(A.devV),aH=Math.abs(A.devH),ok=aV<=tol&&aH<=tol,worst=Math.max(aV,aH);
-  $('#camStatus').textContent=ok?'✔ BOÎTIER DROIT':(worst<=tol*3?'Presque droit':'Pas droit');
-  $('#camStatus').style.color=colOf(worst,tol);
-  let hint='';
-  if(!ok){
-    if(aV>tol)hint+=A.devV>0?'Le haut penche à droite ↗ ':'Le haut penche à gauche ↖ ';
-    if(aH>tol)hint+=A.devH>0?'• Côté droit trop bas ↘':'• Côté gauche trop bas ↙';
-  }
-  $('#camHint').textContent=hint;
+  drawOv(ctx,W,H,dpr,parseFloat($('#tol').value));
 }
 
-/* ---------- placement à la main (secours) ---------- */
+/* ---------- placement à la main (secours, et coffret avec 4 coins) ---------- */
 camBox.addEventListener('pointerdown',e=>{
   if(!manual||mPts.length>=4||!camVideo.videoWidth)return;
   const r=camBox.getBoundingClientRect(),vw=camVideo.videoWidth,vh=camVideo.videoHeight;
   const s=Math.max(r.width/vw,r.height/vh),ox=(r.width-vw*s)/2,oy=(r.height-vh*s)/2;
   mPts.push([(e.clientX-r.left-ox)/(vw*s),(e.clientY-r.top-oy)/(vh*s)]);
+  if(mPts.length===4){boxes=[];bufs=[]}
 });
 $('#camManual').addEventListener('click',()=>{
-  manual=!manual;mPts=[];pts=null;miss=0;
-  $('#camManual').textContent=manual?'🤖 Détection auto':'✋ Placer à la main';
+  manual=(manual+1)%3;mPts=[];boxes=[];bufs=[];st=[];lastHtml='';
+  $('#camManual').textContent=['🤖 Détection auto','✋ Manuel : 4 trous','✋ Manuel : coffret (4 coins)'][manual];
+  if(manual===2)toast('Touche les 4 coins : haut-gauche, haut-droit, bas-gauche, bas-droit');
+  if(manual===1)toast('Touche les 4 trous : haut, bas, gauche, droite');
 });
-$('#camFlip').addEventListener('click',()=>{camFacing=camFacing==='environment'?'user':'environment';startCam()});
 
-/* ---------- capture ---------- */
-$('#camSave').addEventListener('click',()=>{
-  const A=camAngles();
-  if(!A){toast("Boîtier pas encore détecté");return}
+/* ---------- capture (manuelle ou automatique) ---------- */
+$('#camAuto').addEventListener('click',()=>{
+  autoCap=!autoCap;armed=true;
+  $('#camAuto').textContent='⚡ Capture auto : '+(autoCap?'OUI':'NON');
+  $('#camAuto').classList.toggle('on',autoCap);
+  if(autoCap)toast('La photo se prend toute seule quand la mesure est stable');
+});
+function sigOf(){
+  if(!boxes.length)return null;
+  let x=0,y=0;boxes.forEach(b=>KEYS.forEach(k=>{x+=b[k][0];y+=b[k][1]}));
+  return[x/(boxes.length*4),y/(boxes.length*4),boxes.length];
+}
+function autoCapture(){
+  if(!autoCap)return;
+  const sig=sigOf();
+  if(!sig){armed=true;lastSig=null;return}
+  if(!armed){if(lastSig&&(sig[2]!==lastSig[2]||Math.hypot(sig[0]-lastSig[0],sig[1]-lastSig[1])>.2))armed=true;return}
+  const valid=st.filter(Boolean);
+  if(!valid.length||valid.length!==st.length)return;
+  if(valid.every(s=>s.n>=6&&s.spread<.5)){armed=false;lastSig=sig;doCapture(true)}
+}
+$('#camSave').addEventListener('click',()=>doCapture(false));
+function doCapture(auto){
+  const valid=st.filter(Boolean);
+  if(!valid.length||valid.length!==st.length){toast("Boîtier pas encore détecté");return}
   if(!camVideo.videoWidth){toast('Caméra pas encore prête');return}
   const tol=parseFloat($('#tol').value),W=720,H=Math.round(W*camOv.clientHeight/camOv.clientWidth);
   const c=document.createElement('canvas');c.width=W;c.height=H;
   const ctx=c.getContext('2d'),vw=camVideo.videoWidth,vh=camVideo.videoHeight,s=Math.max(W/vw,H/vh);
   ctx.drawImage(camVideo,(W-vw*s)/2,(H-vh*s)/2,vw*s,vh*s);
-  drawOv(ctx,W,H,W/camOv.clientWidth,A,tol);
-  const ok=Math.abs(A.devV)<=tol&&Math.abs(A.devH)<=tol,label=$('#camLabel').value.trim()||'Sans nom';
-  ctx.fillStyle='rgba(0,0,0,.65)';ctx.fillRect(0,H-70,W,70);
+  drawOv(ctx,W,H,W/camOv.clientWidth,tol);
+  const ok=verdict(tol),label=$('#camLabel').value.trim()||('Contrôle n°'+(hist.length+1));
+  const items=valid.map(s=>({v:s.v,h:s.h}));
+  const worstS=valid.reduce((a,s)=>{const m=Math.abs(s.v)>=Math.abs(s.h)?s.v:s.h;return Math.abs(m)>Math.abs(a)?m:a},0);
+  const rowTxt=rowInfo?('rangée : pente '+sg(rowInfo.dev)+', décalage max '+fmt(rowInfo.maxOff)+' mm'):'';
+  ctx.fillStyle='rgba(0,0,0,.7)';ctx.fillRect(0,H-(rowInfo?96:70),W,rowInfo?96:70);
+  let y=H-(rowInfo?68:40);
   ctx.fillStyle=ok?'#22c55e':'#ef4444';ctx.font='bold 26px sans-serif';
-  ctx.fillText((ok?'DROIT':'À CORRIGER')+'  •  '+label,14,H-40);
-  ctx.fillStyle='#e2e8f0';ctx.font='22px sans-serif';
-  ctx.fillText('Vertical '+fmt(Math.abs(A.devV))+'°   Horizontal '+fmt(Math.abs(A.devH))+'°   (tol. ±'+fmt(tol)+'°)',14,H-12);
-  const e={t:Date.now(),label,mode:'c',val:Math.abs(A.devV)>=Math.abs(A.devH)?A.devV:A.devH,vv:A.devV,hh:A.devH,tol,ok,photo:c.toDataURL('image/jpeg',.7)};
+  ctx.fillText((ok?'DROIT':'À CORRIGER')+'  •  '+label,14,y);
+  ctx.fillStyle='#e2e8f0';ctx.font='21px sans-serif';
+  ctx.fillText(valid.length===1?('Vertical '+sg(valid[0].v)+'   Horizontal '+sg(valid[0].h)+'   (tol. ±'+fmt(tol)+'°)'):(valid.length+' boîtiers • écart max '+sg(worstS)+'   (tol. ±'+fmt(tol)+'°)'),14,y+28);
+  if(rowInfo)ctx.fillText(rowTxt,14,y+54);
+  const e={t:Date.now(),label,mode:'c',n:valid.length,val:worstS,items,rowTxt,tol,ok,photo:c.toDataURL('image/jpeg',.7)};
   hist.unshift(e);hist=hist.slice(0,60);
-  let n=hist.filter(x=>x.photo).length;
-  while(!store('ap_hist',hist)&&n>0){
+  let np=hist.filter(x=>x.photo).length;
+  while(!store('ap_hist',hist)&&np>0){
     for(let i=hist.length-1;i>=0;i--){if(hist[i].photo){hist[i].photo=null;break}}
-    n--;
+    np--;
   }
   $('#camLabel').value='';
-  toast(ok?'Photo enregistrée : droit ✔':'Photo enregistrée : pas droit');
-});
+  if(auto)beep();
+  toast((auto?'📸 Auto : ':'')+(ok?'enregistré, tout est droit ✔':'enregistré, à corriger'));
+}
 })();
 </script>
 </body>
