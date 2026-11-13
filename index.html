@@ -133,19 +133,23 @@ input[type=text],select{width:100%;padding:11px;border-radius:10px;border:1px so
           <canvas id="camOv" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
           <div id="camMsg" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;text-align:center;padding:24px;color:#fcd34d;background:rgba(0,0,0,.85);font-size:15px;line-height:1.5"></div>
         </div>
-        <div class="read" style="margin-top:10px">
-          <div class="val" id="camVal" style="font-size:46px">—</div>
-          <div class="status" id="camStatus"></div>
-          <div class="hint" id="camHint"></div>
+        <div class="row" style="margin-top:10px;text-align:center">
+          <div>
+            <div style="font-size:12px;color:var(--mut)">Trous haut / bas<br>(vertical)</div>
+            <div class="val" id="camV" style="font-size:38px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--mut)">—</div>
+            <div id="camVS" style="font-size:13px;font-weight:700;min-height:18px"></div>
+          </div>
+          <div>
+            <div style="font-size:12px;color:var(--mut)">Trous gauche / droite<br>(horizontal)</div>
+            <div class="val" id="camH" style="font-size:38px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--mut)">—</div>
+            <div id="camHS" style="font-size:13px;font-weight:700;min-height:18px"></div>
+          </div>
         </div>
-        <div class="hint" style="margin:8px 0">Ligne bleue = vraie verticale/horizontale (capteur). Touche l'image et glisse pour poser la ligne verte sur le bord du boîtier.</div>
-        <div class="seg" style="padding:0 0 8px">
-          <button data-c="v" class="on">Vertical</button>
-          <button data-c="h">Horizontal</button>
-        </div>
+        <div class="status" id="camStatus" style="text-align:center;margin-top:8px;font-size:19px"></div>
+        <div class="hint" id="camHint" style="text-align:center"></div>
+        <div class="hint" style="margin:8px 0">Cadre le boîtier bien en face, entier à l'écran. L'appli repère seule les 4 trous de vis et compare chaque paire à la vraie verticale et à la vraie horizontale (lignes bleues).</div>
         <div class="row">
-          <button class="btn" id="fm">−0,1°</button>
-          <button class="btn" id="fp">+0,1°</button>
+          <button class="btn" id="camManual">✋ Placer à la main</button>
           <button class="btn" id="camFlip">🔄 Caméra</button>
         </div>
         <label>Repère (pièce, prise, étage…)</label>
@@ -401,7 +405,7 @@ function renderList(){
   L.innerHTML=hist.map((e,i)=>{
     const d=new Date(e.t);
     return `<div class="item">${e.photo?`<img src="${e.photo}" alt="">`:''}
-      <div class="t"><b>${esc(e.label)}</b>${MN[e.mode]} • ${fmt(Math.abs(e.val))}° • tol. ±${fmt(e.tol)}°<br><span style="color:#94a3b8">${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</span></div>
+      <div class="t"><b>${esc(e.label)}</b>${MN[e.mode]} • ${e.vv!=null?'V '+fmt(Math.abs(e.vv))+'° / H '+fmt(Math.abs(e.hh))+'°':fmt(Math.abs(e.val))+'°'} • tol. ±${fmt(e.tol)}°<br><span style="color:#94a3b8">${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</span></div>
       <span class="badge ${e.ok?'ok':'no'}">${e.ok?'DROIT':'À CORRIGER'}</span>
       <button class="x" data-i="${i}" aria-label="Supprimer">✕</button></div>`}).join('');
   $$('#list .x').forEach(b=>b.addEventListener('click',()=>{hist.splice(+b.dataset.i,1);store('ap_hist',hist);renderList()}));
@@ -412,7 +416,7 @@ $('#copyRep').addEventListener('click',async()=>{
   if(!hist.length){toast('Rien à copier');return}
   const txt='RAPPORT DE CONTRÔLE D\'APLOMB\n\n'+hist.slice().reverse().map(e=>{
     const d=new Date(e.t);
-    return `${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})} | ${e.label} | ${MN[e.mode]} | ${fmt(Math.abs(e.val))}° (tol. ±${fmt(e.tol)}°) | ${e.ok?'DROIT':'À CORRIGER'}`}).join('\n');
+    return `${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})} | ${e.label} | ${MN[e.mode]} | ${e.vv!=null?'V '+fmt(Math.abs(e.vv))+'° / H '+fmt(Math.abs(e.hh))+'°':fmt(Math.abs(e.val))+'°'} (tol. ±${fmt(e.tol)}°) | ${e.ok?'DROIT':'À CORRIGER'}`}).join('\n');
   try{
     if(navigator.share){await navigator.share({title:'Rapport d\'aplomb',text:txt});return}
     await navigator.clipboard.writeText(txt);toast('Rapport copié ✔');
@@ -420,9 +424,11 @@ $('#copyRep').addEventListener('click',async()=>{
     try{const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('Rapport copié ✔')}catch(_){toast('Copie impossible')}
   }
 });
-/* ---------- caméra ---------- */
-let stream=null, camFacing='environment', camMode='v', boxAng=null, dragging=false;
+/* ---------- caméra : détection automatique des 4 trous de vis ---------- */
+let stream=null, camFacing='environment', pts=null, miss=0, manual=false, mPts=[], detTimer=null;
 const camBox=$('#camBox'), camOv=$('#camOv'), camVideo=$('#cam');
+const grab=document.createElement('canvas'), gctx=grab.getContext('2d',{willReadFrequently:true});
+const NAMES=['haut','bas','gauche','droite'], KEYS=['top','bottom','left','right'];
 
 async function startCam(){
   stopCam();
@@ -433,36 +439,141 @@ async function startCam(){
     camVideo.srcObject=stream;
     try{await camVideo.play()}catch(e){}
     msg.style.display='none';
+    detTimer=setInterval(detectTick,150);
   }catch(e){
     msg.textContent="Accès à la caméra refusé. Autorise la caméra pour l'appli dans les paramètres du téléphone.";
     msg.style.display='flex';
   }
 }
 function stopCam(){
+  clearInterval(detTimer);detTimer=null;
   if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
-  camVideo.srcObject=null;
+  camVideo.srcObject=null;pts=null;miss=0;
 }
-function camState(){
-  const th=-Math.atan2(g.x,g.y)*D, base=camMode==='v'?0:90, o=camMode==='v'?off.v:off.h;
-  const ref=base-(th-o);                       // angle écran de la vraie verticale/horizontale
-  const dev=boxAng==null?null:fold(boxAng-ref); // écart du boîtier par rapport au vrai aplomb/niveau
-  return{ref,dev};
+
+/* Repère le boîtier bleu, puis le centre des 4 trous (haut, bas, gauche, droite). Renvoie des coordonnées normalisées 0..1 ou null. */
+function detectBox(d,w,h){
+  const n=w*h, luma=new Float32Array(n), m=new Uint8Array(n);
+  for(let i=0,p=0;i<n;i++,p+=4){
+    const r=d[p],g2=d[p+1],b=d[p+2], mx=Math.max(r,g2,b), mn=Math.min(r,g2,b);
+    luma[i]=.3*r+.59*g2+.11*b;
+    if(b>r+20&&b>=g2-5&&mx>0&&(mx-mn)/mx>.25)m[i]=1;
+  }
+  const t=new Uint8Array(n), q=new Uint8Array(n);                  // dilatation 3x3
+  for(let y=0;y<h;y++)for(let x=1;x<w-1;x++){const i=y*w+x;t[i]=m[i-1]|m[i]|m[i+1]}
+  for(let y=1;y<h-1;y++)for(let x=0;x<w;x++){const i=y*w+x;q[i]=t[i-w]|t[i]|t[i+w]}
+  const lab=new Int32Array(n), stack=new Int32Array(n);            // plus grand composant bleu
+  let best=0,bestId=0,id=0;
+  for(let s=0;s<n;s++){
+    if(!q[s]||lab[s])continue;
+    id++;let sp=0,cnt=0;stack[sp++]=s;lab[s]=id;
+    while(sp){
+      const i=stack[--sp];cnt++;const x=i%w;
+      if(x>0&&q[i-1]&&!lab[i-1]){lab[i-1]=id;stack[sp++]=i-1}
+      if(x<w-1&&q[i+1]&&!lab[i+1]){lab[i+1]=id;stack[sp++]=i+1}
+      if(i>=w&&q[i-w]&&!lab[i-w]){lab[i-w]=id;stack[sp++]=i-w}
+      if(i<n-w&&q[i+w]&&!lab[i+w]){lab[i+w]=id;stack[sp++]=i+w}
+    }
+    if(cnt>best){best=cnt;bestId=id}
+  }
+  if(best<n*0.01)return null;
+  const hx=new Int32Array(w), hy=new Int32Array(h);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(lab[y*w+x]===bestId){hx[x]++;hy[y]++}
+  const pct=(hist,p)=>{let c=0;const tg=best*p;for(let i=0;i<hist.length;i++){c+=hist[i];if(c>=tg)return i}return hist.length-1};
+  const x0=pct(hx,.03),x1=pct(hx,.97),y0=pct(hy,.03),y1=pct(hy,.97);
+  const W=x1-x0,H=y1-y0;
+  if(W<24||H<24||W/H<.6||W/H>1.6)return null;                       // pas un boîtier carré
+  const S=(W+H)/2, cx=(x0+x1)/2, cy=(y0+y1)/2, rad=.07*S;
+  const refine=(px,py)=>{
+    for(let it=0;it<3;it++){
+      const xa=Math.max(0,Math.floor(px-rad)),xb=Math.min(w-1,Math.ceil(px+rad)),ya=Math.max(0,Math.floor(py-rad)),yb=Math.min(h-1,Math.ceil(py+rad));
+      const v=[];
+      for(let y=ya;y<=yb;y++)for(let x=xa;x<=xb;x++)if((x-px)*(x-px)+(y-py)*(y-py)<=rad*rad)v.push(luma[y*w+x]);
+      if(v.length<12)return null;
+      const sorted=v.slice().sort((a,b)=>a-b), thr=sorted[Math.floor(sorted.length*.15)];
+      let sw=0,sx=0,sy=0;
+      for(let y=ya;y<=yb;y++)for(let x=xa;x<=xb;x++){
+        if((x-px)*(x-px)+(y-py)*(y-py)>rad*rad)continue;
+        const l=luma[y*w+x];
+        if(l<=thr){const wt=thr-l+1;sw+=wt;sx+=x*wt;sy+=y*wt}
+      }
+      if(!sw)return null;
+      px=sx/sw;py=sy/sw;
+    }
+    return [px/w,py/h];
+  };
+  const top=refine(cx,y0+.07*H), bottom=refine(cx,y0+.94*H), left=refine(x0+.02*W,cy+.02*H), right=refine(x0+.98*W,cy+.02*H);
+  if(!top||!bottom||!left||!right)return null;
+  return {top,bottom,left,right};
 }
-function ln(ctx,w,h,deg,color,lw,dash){
-  const a=deg/D,L=Math.hypot(w,h),cx=w/2,cy=h/2;
+function detectTick(){
+  if(!camOn||manual||!camVideo.videoWidth)return;
+  const vw=camVideo.videoWidth,vh=camVideo.videoHeight,sc=Math.min(1,800/Math.max(vw,vh));
+  const w=Math.round(vw*sc),h=Math.round(vh*sc);
+  if(grab.width!==w||grab.height!==h){grab.width=w;grab.height=h}
+  gctx.drawImage(camVideo,0,0,w,h);
+  let res=null;
+  try{res=detectBox(gctx.getImageData(0,0,w,h).data,w,h)}catch(e){}
+  if(res){
+    miss=0;
+    if(!pts)pts=res;
+    else KEYS.forEach(k=>{pts[k]=[pts[k][0]+(res[k][0]-pts[k][0])*.4,pts[k][1]+(res[k][1]-pts[k][1])*.4]});
+  }else if(++miss>8)pts=null;
+}
+
+/* ---------- angles par rapport à la vraie verticale / horizontale ---------- */
+function curPts(){
+  if(manual)return mPts.length===4?{top:mPts[0],bottom:mPts[1],left:mPts[2],right:mPts[3]}:null;
+  return pts;
+}
+function camAngles(){
+  const P=curPts();
+  if(!P||!camVideo.videoWidth)return null;
+  const vw=camVideo.videoWidth,vh=camVideo.videoHeight;
+  const px=k=>[P[k][0]*vw,P[k][1]*vh];
+  const T=px('top'),B=px('bottom'),L=px('left'),R=px('right');
+  const vS=Math.atan2(T[0]-B[0],B[1]-T[1])*D;     // + : le haut penche à droite (sur l'image)
+  const hS=Math.atan2(R[1]-L[1],R[0]-L[0])*D;     // + : le côté droit est plus bas (sur l'image)
+  const th=-Math.atan2(g.x,g.y)*D;                // rotation du téléphone (capteur)
+  return{devV:fold(vS+th-off.v),devH:fold(hS+th-off.h),th};
+}
+function ln(ctx,cx,cy,len,deg,color,lw,dash){
+  const a=deg/D;
   ctx.beginPath();ctx.setLineDash(dash);ctx.strokeStyle=color;ctx.lineWidth=lw;
-  ctx.moveTo(cx-Math.sin(a)*L,cy+Math.cos(a)*L);ctx.lineTo(cx+Math.sin(a)*L,cy-Math.cos(a)*L);
+  ctx.moveTo(cx-Math.sin(a)*len,cy+Math.cos(a)*len);ctx.lineTo(cx+Math.sin(a)*len,cy-Math.cos(a)*len);
   ctx.stroke();ctx.setLineDash([]);
 }
-function drawOv(ctx,w,h,k,st,tol){
-  ctx.lineWidth=k;ctx.strokeStyle='rgba(255,255,255,.22)';
-  for(let i=1;i<3;i++){ctx.beginPath();ctx.moveTo(w*i/3,0);ctx.lineTo(w*i/3,h);ctx.moveTo(0,h*i/3);ctx.lineTo(w,h*i/3);ctx.stroke()}
-  ln(ctx,w,h,st.ref,'#38bdf8',2.5*k,[10*k,8*k]);
-  if(st.dev!=null){
-    const ok=Math.abs(st.dev)<=tol;
-    ln(ctx,w,h,boxAng,ok?'#22c55e':'#ef4444',3*k,[]);
-    ctx.fillStyle=ok?'#22c55e':'#ef4444';ctx.beginPath();ctx.arc(w/2,h/2,5*k,0,7);ctx.fill();
+const colOf=(a,tol)=>a<=tol?'#22c55e':(a<=tol*3?'#f59e0b':'#ef4444');
+/* dessine sur un canvas de taille W×H, avec la vidéo « cover » (vw×vh) */
+function drawOv(ctx,W,H,k,A,tol){
+  const vw=camVideo.videoWidth||W,vh=camVideo.videoHeight||H,s=Math.max(W/vw,H/vh),ox=(W-vw*s)/2,oy=(H-vh*s)/2;
+  const X=u=>ox+u*vw*s,Y=v=>oy+v*vh*s;
+  ctx.lineWidth=k;ctx.strokeStyle='rgba(255,255,255,.2)';
+  for(let i=1;i<3;i++){ctx.beginPath();ctx.moveTo(W*i/3,0);ctx.lineTo(W*i/3,H);ctx.moveTo(0,H*i/3);ctx.lineTo(W,H*i/3);ctx.stroke()}
+  const P=curPts();
+  let cx=W/2,cy=H/2;
+  if(P){cx=X((P.top[0]+P.bottom[0]+P.left[0]+P.right[0])/4);cy=Y((P.top[1]+P.bottom[1]+P.left[1]+P.right[1])/4)}
+  const th=-Math.atan2(g.x,g.y)*D, L=Math.hypot(W,H);
+  ln(ctx,cx,cy,L,-(th-off.v),'#38bdf8',2.5*k,[10*k,8*k]);        // vraie verticale
+  ln(ctx,cx,cy,L,90-(th-off.h),'#38bdf8',2.5*k,[10*k,8*k]);      // vraie horizontale
+  if(P&&A){
+    const cv=colOf(Math.abs(A.devV),tol),ch=colOf(Math.abs(A.devH),tol);
+    ctx.lineWidth=3*k;
+    ctx.strokeStyle=cv;ctx.beginPath();ctx.moveTo(X(P.top[0]),Y(P.top[1]));ctx.lineTo(X(P.bottom[0]),Y(P.bottom[1]));ctx.stroke();
+    ctx.strokeStyle=ch;ctx.beginPath();ctx.moveTo(X(P.left[0]),Y(P.left[1]));ctx.lineTo(X(P.right[0]),Y(P.right[1]));ctx.stroke();
+    [['top',cv],['bottom',cv],['left',ch],['right',ch]].forEach(([n,c])=>{
+      ctx.fillStyle=c;ctx.strokeStyle='#fff';ctx.lineWidth=1.5*k;
+      ctx.beginPath();ctx.arc(X(P[n][0]),Y(P[n][1]),6*k,0,7);ctx.fill();ctx.stroke();
+    });
+  }else if(manual){
+    mPts.forEach(p=>{ctx.fillStyle='#38bdf8';ctx.beginPath();ctx.arc(X(p[0]),Y(p[1]),6*k,0,7);ctx.fill()});
   }
+}
+function setRead(idV,idS,dev,tol){
+  const a=Math.abs(dev),c=colOf(a,tol),e=$('#'+idV),s=$('#'+idS);
+  e.style.color=c;s.style.color=c;
+  e.textContent=(dev>0.04?'+':dev<-0.04?'−':'')+fmt(a)+'°';
+  s.textContent=a<=tol?'✔ aligné':(a<=tol*3?'presque':'décalé');
 }
 function drawCam(){
   const r=camOv.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
@@ -470,49 +581,56 @@ function drawCam(){
   if(!W||!H)return;
   if(camOv.width!==W||camOv.height!==H){camOv.width=W;camOv.height=H}
   const ctx=camOv.getContext('2d');ctx.clearRect(0,0,W,H);
-  const st=camState(),tol=parseFloat($('#tol').value);
-  drawOv(ctx,W,H,dpr,st,tol);
-  if(st.dev==null){
-    $('#camVal').textContent='—';$('#camVal').style.color='var(--mut)';
-    $('#camStatus').textContent='';$('#camHint').textContent='Place la ligne sur le boîtier';
+  const A=camAngles(),tol=parseFloat($('#tol').value);
+  drawOv(ctx,W,H,dpr,A,tol);
+  if(!A){
+    ['camV','camH'].forEach(i=>{$('#'+i).textContent='—';$('#'+i).style.color='var(--mut)'});
+    $('#camVS').textContent='';$('#camHS').textContent='';$('#camStatus').textContent='';
+    $('#camHint').textContent=manual?('Touche le trou du '+NAMES[Math.min(mPts.length,3)]+' ('+(mPts.length+1)+'/4)'):'Recherche du boîtier… cadre-le bien en face, entier à l\'écran';
     return;
   }
-  const a=Math.abs(st.dev),ok=a<=tol,mid=a<=tol*3,col=ok?'var(--ok)':mid?'var(--warn)':'var(--bad)';
-  $('#camVal').style.color=col;$('#camStatus').style.color=col;
-  $('#camVal').textContent=(st.dev>0.04?'+':st.dev<-0.04?'−':'')+fmt(a)+'°';
-  $('#camStatus').textContent=ok?'✔ DROIT':mid?'Presque droit':'Pas droit';
-  $('#camHint').textContent=ok?'':(camMode==='v'?(st.dev>0?'Le haut penche à droite ↗':'Le haut penche à gauche ↖'):(st.dev>0?'Le côté droit est trop bas ↘':'Le côté gauche est trop bas ↙'));
+  setRead('camV','camVS',A.devV,tol);setRead('camH','camHS',A.devH,tol);
+  const aV=Math.abs(A.devV),aH=Math.abs(A.devH),ok=aV<=tol&&aH<=tol,worst=Math.max(aV,aH);
+  $('#camStatus').textContent=ok?'✔ BOÎTIER DROIT':(worst<=tol*3?'Presque droit':'Pas droit');
+  $('#camStatus').style.color=colOf(worst,tol);
+  let hint='';
+  if(!ok){
+    if(aV>tol)hint+=A.devV>0?'Le haut penche à droite ↗ ':'Le haut penche à gauche ↖ ';
+    if(aH>tol)hint+=A.devH>0?'• Côté droit trop bas ↘':'• Côté gauche trop bas ↙';
+  }
+  $('#camHint').textContent=hint;
 }
-function setLine(e){
-  const r=camBox.getBoundingClientRect();
-  const dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2);
-  if(Math.hypot(dx,dy)<12)return;
-  boxAng=fold(Math.atan2(dx,-dy)*D);
-}
-camBox.addEventListener('pointerdown',e=>{dragging=true;try{camBox.setPointerCapture(e.pointerId)}catch(_){}setLine(e)});
-camBox.addEventListener('pointermove',e=>{if(dragging)setLine(e)});
-['pointerup','pointercancel'].forEach(t=>camBox.addEventListener(t,()=>{dragging=false}));
-$('#fm').addEventListener('click',()=>{if(boxAng==null)return toast("Place d'abord la ligne");boxAng=fold(boxAng-0.1)});
-$('#fp').addEventListener('click',()=>{if(boxAng==null)return toast("Place d'abord la ligne");boxAng=fold(boxAng+0.1)});
+
+/* ---------- placement à la main (secours) ---------- */
+camBox.addEventListener('pointerdown',e=>{
+  if(!manual||mPts.length>=4||!camVideo.videoWidth)return;
+  const r=camBox.getBoundingClientRect(),vw=camVideo.videoWidth,vh=camVideo.videoHeight;
+  const s=Math.max(r.width/vw,r.height/vh),ox=(r.width-vw*s)/2,oy=(r.height-vh*s)/2;
+  mPts.push([(e.clientX-r.left-ox)/(vw*s),(e.clientY-r.top-oy)/(vh*s)]);
+});
+$('#camManual').addEventListener('click',()=>{
+  manual=!manual;mPts=[];pts=null;miss=0;
+  $('#camManual').textContent=manual?'🤖 Détection auto':'✋ Placer à la main';
+});
 $('#camFlip').addEventListener('click',()=>{camFacing=camFacing==='environment'?'user':'environment';startCam()});
-$$('#v-cam .seg button').forEach(b=>b.addEventListener('click',()=>{
-  camMode=b.dataset.c;boxAng=null;
-  $$('#v-cam .seg button').forEach(x=>x.classList.toggle('on',x===b));
-}));
+
+/* ---------- capture ---------- */
 $('#camSave').addEventListener('click',()=>{
-  const st=camState();
-  if(st.dev==null){toast("Place d'abord la ligne sur le boîtier");return}
+  const A=camAngles();
+  if(!A){toast("Boîtier pas encore détecté");return}
   if(!camVideo.videoWidth){toast('Caméra pas encore prête');return}
   const tol=parseFloat($('#tol').value),W=720,H=Math.round(W*camOv.clientHeight/camOv.clientWidth);
   const c=document.createElement('canvas');c.width=W;c.height=H;
   const ctx=c.getContext('2d'),vw=camVideo.videoWidth,vh=camVideo.videoHeight,s=Math.max(W/vw,H/vh);
   ctx.drawImage(camVideo,(W-vw*s)/2,(H-vh*s)/2,vw*s,vh*s);
-  drawOv(ctx,W,H,W/camOv.clientWidth,st,tol);
-  const ok=Math.abs(st.dev)<=tol,label=$('#camLabel').value.trim()||'Sans nom';
-  ctx.fillStyle='rgba(0,0,0,.65)';ctx.fillRect(0,H-46,W,46);
+  drawOv(ctx,W,H,W/camOv.clientWidth,A,tol);
+  const ok=Math.abs(A.devV)<=tol&&Math.abs(A.devH)<=tol,label=$('#camLabel').value.trim()||'Sans nom';
+  ctx.fillStyle='rgba(0,0,0,.65)';ctx.fillRect(0,H-70,W,70);
   ctx.fillStyle=ok?'#22c55e':'#ef4444';ctx.font='bold 26px sans-serif';
-  ctx.fillText((ok?'DROIT ':'À CORRIGER ')+fmt(Math.abs(st.dev))+'°  •  '+label,14,H-14);
-  const e={t:Date.now(),label,mode:'c',val:st.dev,tol,ok,photo:c.toDataURL('image/jpeg',.7)};
+  ctx.fillText((ok?'DROIT':'À CORRIGER')+'  •  '+label,14,H-40);
+  ctx.fillStyle='#e2e8f0';ctx.font='22px sans-serif';
+  ctx.fillText('Vertical '+fmt(Math.abs(A.devV))+'°   Horizontal '+fmt(Math.abs(A.devH))+'°   (tol. ±'+fmt(tol)+'°)',14,H-12);
+  const e={t:Date.now(),label,mode:'c',val:Math.abs(A.devV)>=Math.abs(A.devH)?A.devV:A.devH,vv:A.devV,hh:A.devH,tol,ok,photo:c.toDataURL('image/jpeg',.7)};
   hist.unshift(e);hist=hist.slice(0,60);
   let n=hist.filter(x=>x.photo).length;
   while(!store('ap_hist',hist)&&n>0){
